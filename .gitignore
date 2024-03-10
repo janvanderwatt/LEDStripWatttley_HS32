@@ -1,0 +1,7 @@
+.pio
+.vscode
+lib
+CVS
+OBSOLETE*
+*pairing*
+ota_check.json
