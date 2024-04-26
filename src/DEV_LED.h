@@ -3,10 +3,6 @@
 //   DEVICE-SPECIFIC LED SERVICES //
 ////////////////////////////////////
 
-#include "extras/PwmPin.h" // library of various PWM functions
-
-#include "WS2812FXJvdW.h"
-#include "SPI_ws2812.h"
 #include "led_configurations.h"
 
 typedef void (*LED_change_callback)(void);

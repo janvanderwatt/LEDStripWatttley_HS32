@@ -26,6 +26,10 @@
  *
  ********************************************************************************/
 
+#include "Configuration.h"
+#include "LEDStrip.h"
+#include "DisplayModes.h"
+
 ////////////////////////////////////////////////////////////
 //                                                        //
 //    HomeSpan: A HomeKit implementation for the ESP32    //
@@ -37,7 +41,6 @@
 #include "DEV_LED.h" // This is where we store all code for the DEV_LED types
 
 #include <Update.h>
-// #include <esp32FOTAJvdW.h>
 #include <esp32FOTA.h>
 
 #include "wifi_configurations.h"
@@ -56,12 +59,6 @@
         Serial.print(buffer);                                   \
     }
 
-#define WS2812FX_DEFAULT_COLOUR 0x00CCCC
-#define WS2812FX_DEFAULT_BRIGHTNESS 4
-#define WS2812FX_DEFAULT_MODE 41
-#define WS2812FX_DEFAULT_SPEED 32
-#define WS2812FX_IO_PIN GPIO_NUM_22 // GPIO22 == D1
-
 #define OTA_FIRMWARE_TYPE "32-HS-LED"
 #define OTA_FIRMWARE_VERSION static_cast<uint16_t>(100 * (static_cast<float>(SOFTWARE_VERSION)))
 #define OTA_CHECK_URL "http://linode.webhop.org/ota/fota-esp32/otacheck.php"
@@ -70,6 +67,8 @@
 
 // #define HOMEKIT_MENG
 #define HOMEKIT_4THEWF
+
+LEDString led_string;
 
 void LED_on_HomeKit_change();
 void FX_on_HomeKit_change();
@@ -126,21 +125,23 @@ void setup()
 #endif
     LOG1("============================================================\n");
 
-    switch (pixel_info.pixel_type) {
-    case PIXEL_RGB:
-        model_temp = "RGB";
-        break;
-    case PIXEL_GRB:
-        model_temp = "grB";
-        break;
-    case PIXEL_RGBW:
-        model_temp = "RGBW";
-        break;
-    case PIXEL_GRBW:
-        model_temp = "grBW";
-        break;
+    for (uint8_t strip_index = 0; strip_index < led_string.Strips(); strip_index++) {
+        switch (pixel_info.pixel_type) {
+        case PIXEL_RGB:
+            model_temp = "RGB";
+            break;
+        case PIXEL_GRB:
+            model_temp = "grB";
+            break;
+        case PIXEL_RGBW:
+            model_temp = "RGBW";
+            break;
+        case PIXEL_GRBW:
+            model_temp = "grBW";
+            break;
+        }
+        model_temp += " LED";
     }
-    model_temp += " LED";
     model = new char[model_temp.length() + 1];
     snprintf(model, model_temp.length() + 1, "%s", model_temp.c_str());
 
@@ -241,6 +242,8 @@ void setup()
 
     homeSpan.poll();
 
+    const uint8_t WS2812FX_DEFAULT_COLOUR = 0, WS2812FX_DEFAULT_BRIGHTNESS = 0, WS2812FX_DEFAULT_MODE = 0, WS2812FX_DEFAULT_SPEED = 0;
+
     LOG1("============================= LED ===============================\n");
     PRINT1("DEFAULTS: COLOUR: 0x%06X RGB(%d,%d,%d), BRIGHTNESS: %d, MODE: %d, SPEED: %d\n",
         WS2812FX_DEFAULT_COLOUR,
@@ -250,7 +253,7 @@ void setup()
         WS2812FX_DEFAULT_BRIGHTNESS,
         WS2812FX_DEFAULT_MODE,
         WS2812FX_DEFAULT_SPEED);
-    PRINT1("IO PIN: %d\n", WS2812FX_IO_PIN);
+    // PRINT1("IO PIN: %d\n", WS2812FX_IO_PIN);
     PRINT1("PIXELS: %d --> ", pixel_info.total_pixel_count);
     for (int i = 0; i < pixel_info.segments; i++) {
         PRINT1("\t[%d]=%d,%d ", i, pixel_info.segment_offsets[i], pixel_info.segment_pixel_counts[i]);
@@ -276,8 +279,7 @@ void setup()
     }
     LOG1("\n");
 
-    WS2812FX_setTransitionModesWithFading(true);
-    WS2812FX_init(&pixel_info, WS2812FX_DEFAULT_COLOUR, WS2812FX_DEFAULT_BRIGHTNESS, WS2812FX_DEFAULT_MODE, WS2812FX_DEFAULT_SPEED, WS2812FX_IO_PIN); // GPIO22 == D1
+    led_string.SetTransitionModesWithFading(true);
 
     LOG1("============================= LED ===============================\n");
 } // end of setup()
@@ -287,15 +289,15 @@ void setup()
 void LED_on_HomeKit_change()
 {
     LOG1("Processing LED changes\n");
-    WS2812FX_setColorHSI(LED.H, LED.S, 100);
+    led_string.SetColorHSI(LED.H, LED.S, 100);
     if (LED.power) {
-        WS2812FX_setBrightness((uint8_t)(LED.V * 2.55));
+        led_string.SetBrightness((uint8_t)(LED.V * 2.55));
         // if the FX was switched ON when the LED was last switched OFF, switch it ON again now
         if (FX.power == 128) {
             FX.power = 1;
         }
     } else {
-        WS2812FX_setBrightness(0);
+        led_string.SetBrightness(0);
         // if the FX is currently switched ON, switch if OFF and flag to switch it ON again when the LED is turned ON again
         if (FX.power != 0) {
             FX.power = 128;
@@ -319,17 +321,17 @@ void FX_on_HomeKit_change()
         fx_speed = 50 - FX.V;
     }
     fx_speed *= 5.1;
-    WS2812FX_setInverted(fx_direction);
-    WS2812FX_setSpeed(fx_speed);
+    led_string.SetInverted(fx_direction);
+    led_string.SetSpeed(fx_speed);
     if (LED.power) {
         // only use bit 0 to determine whether to switch on the FX
         if (FX.power & 1) {
-            WS2812FX_setMode360(FX.H);
+            led_string.SetMode360(FX.H);
         } else {
-            WS2812FX_setMode360(0);
+            led_string.SetMode360(0);
         }
     }
-    uint8_t fx_mode = WS2812FX_getMode();
+    uint8_t fx_mode = led_string.GetMode();
     LOG2("checking if there is a relevant mode to switch ON, switching off all non-relevant modes\n");
     LOG2("--> target: FX.power:");
     LOG2(FX.power);
@@ -348,7 +350,7 @@ void FX_on_HomeKit_change()
         if (LED.power > 0) {
             //     {.id = 1, .mode_state = 0, .FX_power = 1, .FX_mode = 60, .FX_speed = 128, .FX_direction = 2},   // rainbow cycle
             // map the HUE to the mode count
-            uint8_t mode_mode = ((uint16_t)WS2812FX_getModeCount()) * ((uint16_t)modes[mode].FX_mode) / 360;
+            uint8_t mode_mode = ((uint16_t)DisplayMode::DISPLAY_MODES) * ((uint16_t)modes[mode].FX_mode) / 360;
 
             LOG2("  --? compare: [");
             LOG2(names[mode]);
@@ -474,15 +476,15 @@ void progress_updater(size_t progress, size_t size)
 {
     if (last_progress == 0) {
         last_progress = 1;
-        WS2812FX_setTransitionModesWithFading(0);
-        WS2812FX_setMode360(0); // static
+        led_string.SetTransitionModesWithFading(0);
+        led_string.SetMode360(0); // static
     }
     if (progress > last_progress) {
         last_progress = progress;
         size_t led_progress = progress;
-        led_progress *= WS2812FX_getLength();
+        // led_progress *= WS2812FX_getLength();
         led_progress /= size;
-        WS2812FX_set_static_progress(led_progress);
+        // WS2812FX_set_static_progress(led_progress);
 
         progress *= 100;
         progress /= size;
@@ -523,15 +525,17 @@ void loop()
         if (updatedNeeded) {
             last_progress = 0;
             last_percentage = -1;
-            WS2812FX_setBrightness(4);
-            WS2812FX_setColorRGB(0, 255, 0);
-            WS2812FX_setSpeed(128);
-            WS2812FX_setMode360(199); // comet
+            led_string.SetBrightness(4);
+            led_string.SetColorRGB(0, 255, 0);
+            led_string.SetSpeed(128);
+            led_string.SetMode360(199); // comet
             esp32FOTAtool.setProgressCb(progress_updater);
             esp32FOTAtool.execOTA();
-            WS2812FX_setColorRGB(255, 0, 0);
+            led_string.SetColorRGB(255, 0, 0);
         }
         next_ota_check_time = now + (60ULL * 60ULL * 1000000ULL) * OTA_CHECK_INTERVAL_HOURS;
         PRINT1("next OTA check: %lld\n", next_ota_check_time);
     }
+
+    led_string.Update();
 } // end of loop()
