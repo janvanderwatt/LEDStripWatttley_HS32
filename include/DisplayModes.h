@@ -2,9 +2,7 @@
 
 #include <Arduino.h>
 
-#include "LEDString.h"
-
-#include <NeoPixelBus.h>
+#include "LEDStrip.h"
 
 extern const char* WS2812FXJVDW_C_REV;
 
