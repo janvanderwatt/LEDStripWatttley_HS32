@@ -23,9 +23,9 @@ typedef struct
   uint8_t id;
   uint8_t mode_state;
   uint8_t FX_power;
-  int FX_mode;
-  int FX_speed;
-  int FX_direction;
+  int8_t FX_mode;
+  uint8_t FX_speed;
+  uint8_t FX_direction;
   DEV_LED *mode_switch;
   mode_change_callback on_HomeKit_change;
 } modes_t;
