@@ -1,19 +1,22 @@
 #pragma once
 
-#define OVERSAMPLING 4
-
 // --------------------------------------------------------------------------------------
 // LED STRIP: Morne's Room
 // --------------------------------------------------------------------------------------
 #if defined(MORNE_ROOM_STRIP) || defined(STRIP_72WHITE_MORNE_ROOM)
-#define NeoColor RgbwColor
+#define OVERSAMPLING 2
+
+#define NeoColor RgbColor
 #define NeoFeature NeoGrbFeature
 #define NeoMethod NeoEsp32I2s1X8800KbpsMethod
 
 // #define LED_COUNT_MAX 711
 // WS2812FX_SINGLE_SEGMENT_STRIP(PIXEL_GRB, LED_COUNT_MAX);
 
-#define DISPLAY_STARTING_MODE DISPLAY_MODE_COMET
+#define WS2812FX_DEFAULT_COLOUR 0xc0c0c0
+#define WS2812FX_DEFAULT_BRIGHTNESS 50
+#define WS2812FX_DEFAULT_SPEED 128
+#define WS2812FX_DEFAULT_MODE DISPLAY_MODE_COMET
 
 #define SEGMENTS 1 // the number of "individual" segments on each strip
 #define STRIPS 2 // the number of separate strips that make up the virtual strip
