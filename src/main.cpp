@@ -65,10 +65,17 @@
 #define OTA_FIRST_CHECK_SECONDS 60
 #define OTA_CHECK_INTERVAL_HOURS 23
 
+#define WS2812FX_DIRECTION_LEFT 0
+#define WS2812FX_DIRECTION_RIGHT 1
+#define WS2812FX_DIRECTION_NOT_INVERTED 0
+#define WS2812FX_DIRECTION_INVERTED 1
+#define WS2812FX_DIRECTION_RANDOM 2
+#define WS2812FX_DIRECTION_KEEP 3
+
 // #define HOMEKIT_MENG
 #define HOMEKIT_4THEWF
 
-LEDString led_string;
+LEDString* led_string;
 
 void LED_on_HomeKit_change();
 void FX_on_HomeKit_change();
@@ -85,10 +92,10 @@ const char* names[] = {
 };
 
 modes_t modes[] = {
-    { .id = 0, .mode_state = 0, .FX_power = 0, .FX_mode = -1, .FX_speed = -1, .FX_direction = -1 }, // static
-    { .id = 1, .mode_state = 0, .FX_power = 1, .FX_mode = 60, .FX_speed = 128, .FX_direction = 2 }, // rainbow cycle
-    { .id = 2, .mode_state = 0, .FX_power = 1, .FX_mode = 199, .FX_speed = 32, .FX_direction = 2 }, // comet
-    { .id = 3, .mode_state = 0, .FX_power = 1, .FX_mode = 266, .FX_speed = 128, .FX_direction = 0 } // pulsar
+    { .id = 0, .mode_state = 0, .FX_power = 0, .FX_mode = -1, .FX_speed = 0, .FX_direction = WS2812FX_DIRECTION_KEEP }, // static
+    { .id = 1, .mode_state = 0, .FX_power = 1, .FX_mode = DisplayMode::DISPLAY_MODE_RAINBOW_CYCLE, .FX_speed = 128, .FX_direction = WS2812FX_DIRECTION_RANDOM }, // rainbow cycle
+    { .id = 2, .mode_state = 0, .FX_power = 1, .FX_mode = DisplayMode::DISPLAY_MODE_COMET, .FX_speed = 32, .FX_direction = WS2812FX_DIRECTION_RANDOM }, // comet
+    { .id = 3, .mode_state = 0, .FX_power = 1, .FX_mode = DisplayMode::DISPLAY_MODE_FIREWORKS_RANDOM, .FX_speed = 128, .FX_direction = WS2812FX_DIRECTION_KEEP } // pulsar
 }; // pulsar
 
 int mode_switches = 0;
@@ -114,10 +121,12 @@ void setup()
     Serial.begin(115200);
     delay(10);
 
+    led_string = new LEDString();
+
     int dev_guid_len = strlen(dev_guid_prefix) + strlen(dev_guid_mac) + 6;
     int accessory_id = 0;
     char* this_dev_guid;
-    String model_temp;
+    String model_temp = "";
 
     homeSpan.setLogLevel(1);
 #if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
@@ -125,32 +134,32 @@ void setup()
 #endif
     LOG1("============================================================\n");
 
-    for (uint8_t strip_index = 0; strip_index < led_string.Strips(); strip_index++) {
-        switch (pixel_info.pixel_type) {
+    for (uint8_t strip_index = 0; strip_index < led_string->Strips(); strip_index++) {
+        if (model_temp.length() > 0) {
+            model_temp += "-";
+        }
+        switch (led_string->StripPixelType(strip_index)) {
         case PIXEL_RGB:
-            model_temp = "RGB";
+            model_temp += "RGB";
             break;
         case PIXEL_GRB:
-            model_temp = "grB";
+            model_temp += "grB";
             break;
         case PIXEL_RGBW:
-            model_temp = "RGBW";
+            model_temp += "RGBW";
             break;
         case PIXEL_GRBW:
-            model_temp = "grBW";
+            model_temp += "grBW";
             break;
         }
-        model_temp += " LED";
     }
+    model_temp += "-LED";
     model = new char[model_temp.length() + 1];
     snprintf(model, model_temp.length() + 1, "%s", model_temp.c_str());
 
     // "$Revision: 1.5 $"
     // Note: HomeKit only allows versions in the format X.Y.Z, so we can't append the library header revision as well
     String revision_code = WS2812FXJVDW_C_REV;
-    uint8_t colon = revision_code.indexOf(':') + 2;
-    uint8_t space = revision_code.indexOf(' ', colon);
-    revision_code = revision_code.substring(colon, space);
 
     version = new char[revision_code.length() + 1];
     snprintf(version, revision_code.length() + 1, "%s", revision_code.c_str());
@@ -254,32 +263,38 @@ void setup()
         WS2812FX_DEFAULT_MODE,
         WS2812FX_DEFAULT_SPEED);
     // PRINT1("IO PIN: %d\n", WS2812FX_IO_PIN);
-    PRINT1("PIXELS: %d --> ", pixel_info.total_pixel_count);
-    for (int i = 0; i < pixel_info.segments; i++) {
-        PRINT1("\t[%d]=%d,%d ", i, pixel_info.segment_offsets[i], pixel_info.segment_pixel_counts[i]);
+    PRINT1("STRING PIXELS: %d -->\n", led_string->Pixels);
+    for (int strip_index = 0; strip_index < led_string->Segments; strip_index++) {
+        PRINT1("STRIP PIXELS: %d --> ", led_string->StripRealPixels(strip_index));
+        for (uint8_t i = 0; i < led_string->StripSegments(strip_index); i++) {
+            PRINT1("\t[%d]=%d,%d ", i, led_string->StripSegmentOffset(strip_index, i), led_string->StripSegmentPixelCount(strip_index, i));
+        }
+        LOG1("\tTYPE: ");
+        switch (led_string->StripPixelType(strip_index)) {
+        case PIXEL_RGB:
+            LOG1("\tRGB");
+            break;
+        case PIXEL_RGBW:
+            LOG1("\tRGBW");
+            break;
+        case PIXEL_GRB:
+            LOG1("\tGRB");
+            break;
+        case PIXEL_GRBW:
+            LOG1("\tGRBW");
+            break;
+        default:
+            PRINT1("\tunknown(%d)", led_string->StripPixelType(strip_index));
+            break;
+        }
+        LOG1("\n");
     }
-    LOG1("\n");
-    LOG1("TYPE: ");
-    switch (pixel_info.pixel_type) {
-    case PIXEL_RGB:
-        LOG1("\tRGB");
-        break;
-    case PIXEL_RGBW:
-        LOG1("\tRGBW");
-        break;
-    case PIXEL_GRB:
-        LOG1("\tGRB");
-        break;
-    case PIXEL_GRBW:
-        LOG1("\tGRBW");
-        break;
-    default:
-        PRINT1("\tunknown(%d)", pixel_info.pixel_type);
-        break;
-    }
-    LOG1("\n");
 
-    led_string.SetTransitionModesWithFading(true);
+    led_string->SetTransitionModesWithFading(true);
+    led_string->SetSpeed(WS2812FX_DEFAULT_SPEED);
+    led_string->SetBrightness(WS2812FX_DEFAULT_BRIGHTNESS);
+    led_string->SetColorRGB(WS2812FX_DEFAULT_COLOUR);
+    led_string->SetMode(WS2812FX_DEFAULT_MODE);
 
     LOG1("============================= LED ===============================\n");
 } // end of setup()
@@ -289,15 +304,15 @@ void setup()
 void LED_on_HomeKit_change()
 {
     LOG1("Processing LED changes\n");
-    led_string.SetColorHSI(LED.H, LED.S, 100);
+    led_string->SetColorHSI(LED.H, LED.S, 100);
     if (LED.power) {
-        led_string.SetBrightness((uint8_t)(LED.V * 2.55));
+        led_string->SetBrightness((uint8_t)(LED.V * 2.55));
         // if the FX was switched ON when the LED was last switched OFF, switch it ON again now
         if (FX.power == 128) {
             FX.power = 1;
         }
     } else {
-        led_string.SetBrightness(0);
+        led_string->SetBrightness(0);
         // if the FX is currently switched ON, switch if OFF and flag to switch it ON again when the LED is turned ON again
         if (FX.power != 0) {
             FX.power = 128;
@@ -321,17 +336,17 @@ void FX_on_HomeKit_change()
         fx_speed = 50 - FX.V;
     }
     fx_speed *= 5.1;
-    led_string.SetInverted(fx_direction);
-    led_string.SetSpeed(fx_speed);
+    led_string->SetInverted(fx_direction);
+    led_string->SetSpeed(fx_speed);
     if (LED.power) {
         // only use bit 0 to determine whether to switch on the FX
         if (FX.power & 1) {
-            led_string.SetMode360(FX.H);
+            led_string->SetMode360(FX.H);
         } else {
-            led_string.SetMode360(0);
+            led_string->SetMode(DisplayMode::DISPLAY_MODE_STATIC);
         }
     }
-    uint8_t fx_mode = led_string.GetMode();
+    uint8_t fx_mode = led_string->GetMode();
     LOG2("checking if there is a relevant mode to switch ON, switching off all non-relevant modes\n");
     LOG2("--> target: FX.power:");
     LOG2(FX.power);
@@ -374,10 +389,10 @@ void FX_on_HomeKit_change()
                     // if no speed setting is required inthe mode, or the speed is within range after mapping from % back to BYTE
                     if (modes[mode].FX_speed < 0 || (abs(modes[mode].FX_speed - fx_speed) <= 6)) {
                         // if the speed is 0 (direction irrelevant), directions match, or the mode definition is set to irrelevant/random, then we have a complete match
-                        if (fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction < 0 || modes[mode].FX_direction == 2) {
+                        if (fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction == WS2812FX_DIRECTION_KEEP || modes[mode].FX_direction == WS2812FX_DIRECTION_RANDOM) {
                             desired_state = 1;
                         } else {
-                            LOG2("(failed)fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction < 0 || modes[mode].FX_direction == 2\n");
+                            LOG2("fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction == %d || modes[mode].FX_direction == %d\n", WS2812FX_DIRECTION_KEEP, WS2812FX_DIRECTION_RANDOM);
                         }
                     } else {
                         LOG2("(failed test)modes[mode].FX_speed < 0 || (abs(modes[mode].FX_speed - fx_speed) <= 6\n");
@@ -408,7 +423,7 @@ void FX_on_HomeKit_change()
 void MODE_on_HomeKit_change(int changed_mode)
 {
     // A mode has changed state
-    LOG1("switching off ALL other modes except MODE ");
+    LOG1("switching off ALL other modes except MODE [%d] ", changed_mode);
     LOG1(names[changed_mode]);
     LOG1("\n");
     for (uint8_t other_mode = 0; other_mode < mode_switches; other_mode++) {
@@ -433,14 +448,17 @@ void MODE_on_HomeKit_change(int changed_mode)
             FX.power = modes[changed_mode].FX_power;
             // If the FX is desired to be ON, then check the other parameters
             if (modes[changed_mode].FX_power == 1) {
-                if (modes[changed_mode].FX_mode >= 0)
+                if (modes[changed_mode].FX_mode >= 0) {
                     FX.H = modes[changed_mode].FX_mode;
+                    FX.H /= DisplayMode::DISPLAY_MODES;
+                    FX.H *= 360;
+                }
                 if (modes[changed_mode].FX_speed >= 0) {
                     int8_t direction = modes[changed_mode].FX_direction;
                     // if a direction was specified, then set it
-                    if (direction >= 0) {
+                    if (direction != WS2812FX_DIRECTION_KEEP) {
                         // if a random direction was specified, randomly set to 0 or 1
-                        if (direction == 2)
+                        if (direction == WS2812FX_DIRECTION_RANDOM)
                             direction = random(2);
                         FX.V = 50.499f + (direction == 0 ? 1 : -1) * ((float)modes[changed_mode].FX_speed / 5.1f);
                         FX.V = floorf((FX.V < 0 ? 0 : (FX.V > 100) ? 100
@@ -470,14 +488,14 @@ void MODE_on_HomeKit_change(int changed_mode)
     FX_on_HomeKit_change();
 }
 
-size_t last_progress;
+/*size_t last_progress;
 uint8_t last_percentage;
 void progress_updater(size_t progress, size_t size)
 {
     if (last_progress == 0) {
         last_progress = 1;
-        led_string.SetTransitionModesWithFading(0);
-        led_string.SetMode360(0); // static
+        led_string->SetTransitionModesWithFading(0);
+        led_string->SetMode360(0); // static
     }
     if (progress > last_progress) {
         last_progress = progress;
@@ -493,18 +511,19 @@ void progress_updater(size_t progress, size_t size)
             PRINT1("%d%%..", progress);
         }
     }
-}
+}*/
 
 //////////////////////////////////////
 
 void loop()
 {
     homeSpan.poll();
+    delay(1);
 
     // check whether it is time to perform a check for new software
     uint64_t now = micros();
     if (now > next_ota_check_time) {
-        PRINT1("%lld: doing OTA check\n", now);
+        /*PRINT1("%lld: doing OTA check\n", now);
         String manifest_url = OTA_CHECK_URL;
         String mac = WiFi.macAddress();
         mac.replace(":", "");
@@ -525,17 +544,17 @@ void loop()
         if (updatedNeeded) {
             last_progress = 0;
             last_percentage = -1;
-            led_string.SetBrightness(4);
-            led_string.SetColorRGB(0, 255, 0);
-            led_string.SetSpeed(128);
-            led_string.SetMode360(199); // comet
+            led_string->SetBrightness(4);
+            led_string->SetColorRGB(0, 255, 0);
+            led_string->SetSpeed(128);
+            led_string->SetMode360(199); // comet
             esp32FOTAtool.setProgressCb(progress_updater);
             esp32FOTAtool.execOTA();
-            led_string.SetColorRGB(255, 0, 0);
+            led_string->SetColorRGB(255, 0, 0);
         }
         next_ota_check_time = now + (60ULL * 60ULL * 1000000ULL) * OTA_CHECK_INTERVAL_HOURS;
-        PRINT1("next OTA check: %lld\n", next_ota_check_time);
+        PRINT1("next OTA check: %lld\n", next_ota_check_time);*/
     }
 
-    led_string.Update();
+    led_string->Update();
 } // end of loop()
