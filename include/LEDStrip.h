@@ -63,33 +63,37 @@ typedef struct
 class LEDString;
 struct LEDStripPixelInfo_t {
     LEDString* string;
-    uint8_t strip_number;
-    uint16_t virtual_pixel_count = 0;
+    uint8_t oversampling;
     uint32_t pixel_offset;
     bool run;
     bool reverse = false;
     uint32_t mode_start_time, now, time_since_start;
-    int8_t mode_index = -1, previous_mode_index = -1;
+    int8_t mode_index = -1;
     uint32_t next_mode_change_time;
     RgbColor rgb;
     HslColor hsl;
     uint8_t storage[MODE_STORAGE];
+    int32_t *R, *G, *B;
 };
 
 class LEDString {
 protected:
-    LEDStripPixelInfo_t lspi;
-    uint8_t Speed = 128, Inverted = 0, FadingOn = 0;
+    LEDStripPixelInfo_t lspi[2];
+    LEDStripPixelInfo_t *current_lspi, *previous_lspi;
+    uint8_t Speed, Inverted, Brightness, ModeIndex;
+    uint8_t currentIndex, previousIndex;
+    int16_t fadeTimeMs;
+    RgbColor RGB;
+    HslColor HSL;
 
 public:
-    uint8_t Segments;
-    uint16_t Pixels;
+    uint8_t Segments, FadingOn;
+    uint16_t VirtualPixels;
 
 public:
     LEDString();
 
     void ClearTo(RgbColor c);
-    void ClearOversamplingTo(RgbColor c, const uint8_t shift);
     RgbColor GetStripPixel(uint16_t strip_pixel_index, bool use_direction);
     void SetStripPixel(uint16_t strip_pixel_index, RgbColor pixel_colour, bool use_direction);
     void SetSegmentPixel(uint8_t segment_index, uint16_t segment_pixel_index, RgbColor pixel_colour, bool use_direction);
@@ -106,8 +110,8 @@ public:
     void StartModeTransition();
     void SetTransitionModesWithFading(uint8_t faing_on);
 
-    uint8_t GetMode() { return lspi.mode_index; }
-
+    uint8_t GetMode();
+    float GetMode360();
     uint8_t SegmentPixels(uint8_t segment_index);
 
     uint8_t Strips();
@@ -117,8 +121,5 @@ public:
     uint16_t StripSegmentOffset(uint8_t strip_index, uint8_t segment_index);
     uint16_t StripSegmentPixelCount(uint8_t strip_index, uint8_t segment_index);
 
-    void MaterialiseOversampling(const uint8_t shift, const uint8_t oversampling);
-    void Update();
-
-    int32_t *R, *G, *B;
+    void MaterialisePixelData(uint8_t time_delay_ms);
 };

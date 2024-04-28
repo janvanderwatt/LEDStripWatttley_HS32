@@ -4,7 +4,9 @@
 // LED STRIP: Morne's Room
 // --------------------------------------------------------------------------------------
 #if defined(MORNE_ROOM_STRIP) || defined(STRIP_72WHITE_MORNE_ROOM)
-#define OVERSAMPLING 2
+#define OVERSAMPLING_PWR2 1
+#define OVERSAMPLING (1 << OVERSAMPLING_PWR2)
+#define SHIFT 0
 
 #define NeoColor RgbColor
 #define NeoFeature NeoGrbFeature
@@ -17,6 +19,7 @@
 #define WS2812FX_DEFAULT_BRIGHTNESS 50
 #define WS2812FX_DEFAULT_SPEED 128
 #define WS2812FX_DEFAULT_MODE DISPLAY_MODE_COMET
+#define WS2812FX_FADE_TIME_MS 1000
 
 #define SEGMENTS 1 // the number of "individual" segments on each strip
 #define STRIPS 2 // the number of separate strips that make up the virtual strip

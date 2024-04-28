@@ -116,189 +116,6 @@ esp32FOTA esp32FOTAtool(OTA_FIRMWARE_TYPE, OTA_FIRMWARE_VERSION, false);
 
 uint64_t next_ota_check_time = OTA_FIRST_CHECK_SECONDS * 1000000ULL;
 
-void setup()
-{
-    Serial.begin(115200);
-    delay(10);
-
-    led_string = new LEDString();
-
-    int dev_guid_len = strlen(dev_guid_prefix) + strlen(dev_guid_mac) + 6;
-    int accessory_id = 0;
-    char* this_dev_guid;
-    String model_temp = "";
-
-    homeSpan.setLogLevel(1);
-#if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
-    homeSpan.setWifiCredentials(WIFI_SSID, WIFI_PASSWORD);
-#endif
-    LOG1("============================================================\n");
-
-    for (uint8_t strip_index = 0; strip_index < led_string->Strips(); strip_index++) {
-        if (model_temp.length() > 0) {
-            model_temp += "-";
-        }
-        switch (led_string->StripPixelType(strip_index)) {
-        case PIXEL_RGB:
-            model_temp += "RGB";
-            break;
-        case PIXEL_GRB:
-            model_temp += "grB";
-            break;
-        case PIXEL_RGBW:
-            model_temp += "RGBW";
-            break;
-        case PIXEL_GRBW:
-            model_temp += "grBW";
-            break;
-        }
-    }
-    model_temp += "-LED";
-    model = new char[model_temp.length() + 1];
-    snprintf(model, model_temp.length() + 1, "%s", model_temp.c_str());
-
-    // "$Revision: 1.5 $"
-    // Note: HomeKit only allows versions in the format X.Y.Z, so we can't append the library header revision as well
-    String revision_code = WS2812FXJVDW_C_REV;
-
-    version = new char[revision_code.length() + 1];
-    snprintf(version, revision_code.length() + 1, "%s", revision_code.c_str());
-    PRINT1("VERSION: %s\n", version);
-
-    String mac = WiFi.macAddress();
-    LOG1("MAC ADDRESS: " + mac + "\n");
-    snprintf(dev_guid_mac, sizeof(dev_guid_mac) - 1, "%c%c%c%c%c%c%c%c", mac[6], mac[7], mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
-
-    snprintf(ap_ssid, sizeof(ap_ssid) - 1, "HSLED-%c%c%c%c%c%c", mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
-    PRINT1("AP ID: %s\n", ap_ssid);
-
-    snprintf(host_name, sizeof(host_name) - 1, "HSLED-%c%c%c%c%c%c", mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
-    PRINT1("WIFI HOST NAME: %s\n", host_name);
-    WiFi.setHostname(host_name);
-
-    uint16_t startup_delay = ((uint16_t)mac[15]) << 4 ^ mac[16];
-    PRINT1("waiting : %d ms\n", startup_delay);
-    delay(startup_delay); // wait a random time based on MAC address before starting
-
-    LOG1("============================================================\n");
-
-    // see here for details: https://github.com/HomeSpan/HomeSpan/blob/master/docs/Reference.md
-    // homeSpan.enableOTA();
-    // By not calling these functions, HomeSpan will not attempt to use those features
-    // homeSpan.setControlPin(21); // default is 21
-    homeSpan.setStatusPin(GPIO_NUM_2); // default is 13
-    homeSpan.setApSSID(ap_ssid); // default is "HomeSpan-Setup"
-    homeSpan.setApPassword("homespan"); // default is "homespan"
-    homeSpan.setQRID(HOMEKIT_SETUP_QRCODE); // default is "HSPN"
-    // homeSpan.setQRID(HOMEKIT_SETUP_QRCODE); // default is "HSPN"
-    // homeSpan.processSerialCommand("S 07072071");
-
-    // homeSpan.defaultSetupCode = "08801118"; // default is DEFAULT_SETUP_CODE = "46637726"
-    //  must be called last
-    homeSpan.enableAutoStartAP(); // enables automatic start-up of WiFi Access Point if WiFi Credentials are not found at boot time
-    homeSpan.begin(Category::Bridges, "HomeSpan Bridge");
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify("Bridge #1", manufacturer, this_dev_guid, model, "0.1", 3);
-    // new DEV_Identify("Bridge #1", "HomeSpan", "abc-123", "HS Bridge", "0.9", 3);
-    new Service::HAPProtocolInformation();
-    new Characteristic::Version("1.1.0");
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify("RGB LED", manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("RGB LED", "HomeSpan", "abc-123", "20mA LED", "0.9", 0);
-    new DEV_RgbLED(&LED);
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify("RGB FX", manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("RGB LED", "HomeSpan", "abc-123", "20mA LED", "0.9", 0);
-    new DEV_RgbLED(&FX);
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("Static", "HomeSpan", "6abc-123", "26mA LED", "0.96", 0);
-    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
-    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
-    mode_switches++;
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("Rainbow", "HomeSpan", "7abc-123", "27mA LED", "0.97", 0);
-    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
-    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
-    mode_switches++;
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("Comet", "HomeSpan", "8abc-123", "28mA LED", "0.98", 0);
-    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
-    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
-    mode_switches++;
-
-    new SpanAccessory();
-    MAKE_NEXT_DEV_GUID;
-    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
-    // new DEV_Identify("Pulsar", "HomeSpan", "9abc-123", "20mA LED", "0.9", 0);
-    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
-    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
-    mode_switches++;
-
-    homeSpan.poll();
-
-    const uint8_t WS2812FX_DEFAULT_COLOUR = 0, WS2812FX_DEFAULT_BRIGHTNESS = 0, WS2812FX_DEFAULT_MODE = 0, WS2812FX_DEFAULT_SPEED = 0;
-
-    LOG1("============================= LED ===============================\n");
-    PRINT1("DEFAULTS: COLOUR: 0x%06X RGB(%d,%d,%d), BRIGHTNESS: %d, MODE: %d, SPEED: %d\n",
-        WS2812FX_DEFAULT_COLOUR,
-        (WS2812FX_DEFAULT_COLOUR >> 16) & 0xFF,
-        (WS2812FX_DEFAULT_COLOUR >> 8) & 0xFF,
-        (WS2812FX_DEFAULT_COLOUR >> 0) & 0xFF,
-        WS2812FX_DEFAULT_BRIGHTNESS,
-        WS2812FX_DEFAULT_MODE,
-        WS2812FX_DEFAULT_SPEED);
-    // PRINT1("IO PIN: %d\n", WS2812FX_IO_PIN);
-    PRINT1("STRING PIXELS: %d -->\n", led_string->Pixels);
-    for (int strip_index = 0; strip_index < led_string->Segments; strip_index++) {
-        PRINT1("STRIP PIXELS: %d --> ", led_string->StripRealPixels(strip_index));
-        for (uint8_t i = 0; i < led_string->StripSegments(strip_index); i++) {
-            PRINT1("\t[%d]=%d,%d ", i, led_string->StripSegmentOffset(strip_index, i), led_string->StripSegmentPixelCount(strip_index, i));
-        }
-        LOG1("\tTYPE: ");
-        switch (led_string->StripPixelType(strip_index)) {
-        case PIXEL_RGB:
-            LOG1("\tRGB");
-            break;
-        case PIXEL_RGBW:
-            LOG1("\tRGBW");
-            break;
-        case PIXEL_GRB:
-            LOG1("\tGRB");
-            break;
-        case PIXEL_GRBW:
-            LOG1("\tGRBW");
-            break;
-        default:
-            PRINT1("\tunknown(%d)", led_string->StripPixelType(strip_index));
-            break;
-        }
-        LOG1("\n");
-    }
-
-    led_string->SetTransitionModesWithFading(true);
-    led_string->SetSpeed(WS2812FX_DEFAULT_SPEED);
-    led_string->SetBrightness(WS2812FX_DEFAULT_BRIGHTNESS);
-    led_string->SetColorRGB(WS2812FX_DEFAULT_COLOUR);
-    led_string->SetMode(WS2812FX_DEFAULT_MODE);
-
-    LOG1("============================= LED ===============================\n");
-} // end of setup()
-
 //////////////////////////////////////
 
 void LED_on_HomeKit_change()
@@ -346,7 +163,7 @@ void FX_on_HomeKit_change()
             led_string->SetMode(DisplayMode::DISPLAY_MODE_STATIC);
         }
     }
-    uint8_t fx_mode = led_string->GetMode();
+    uint8_t fx_mode = led_string->GetMode360();
     LOG2("checking if there is a relevant mode to switch ON, switching off all non-relevant modes\n");
     LOG2("--> target: FX.power:");
     LOG2(FX.power);
@@ -485,7 +302,7 @@ void MODE_on_HomeKit_change(int changed_mode)
     LOG1("\n");
     // call the HomeKit change functions to process the changes mades to the LED and FX settings
     LED_on_HomeKit_change();
-    FX_on_HomeKit_change();
+    // FX_on_HomeKit_change();
 }
 
 /*size_t last_progress;
@@ -515,10 +332,179 @@ void progress_updater(size_t progress, size_t size)
 
 //////////////////////////////////////
 
+void setup()
+{
+    Serial.begin(115200);
+    delay(10);
+
+    int dev_guid_len = strlen(dev_guid_prefix) + strlen(dev_guid_mac) + 6;
+    int accessory_id = 0;
+    char* this_dev_guid;
+    String model_temp = "";
+
+    led_string = new LEDString();
+    led_string->SetTransitionModesWithFading(true);
+
+    homeSpan.setLogLevel(1);
+#if defined(WIFI_SSID) && defined(WIFI_PASSWORD)
+    homeSpan.setWifiCredentials(WIFI_SSID, WIFI_PASSWORD);
+#endif
+    LOG1("============================================================\n");
+
+    for (uint8_t strip_index = 0; strip_index < led_string->Strips(); strip_index++) {
+        if (model_temp.length() > 0) {
+            model_temp += "-";
+        }
+        switch (led_string->StripPixelType(strip_index)) {
+        case PIXEL_RGB:
+            model_temp += "RGB";
+            break;
+        case PIXEL_GRB:
+            model_temp += "grB";
+            break;
+        case PIXEL_RGBW:
+            model_temp += "RGBW";
+            break;
+        case PIXEL_GRBW:
+            model_temp += "grBW";
+            break;
+        }
+    }
+    model_temp += "-LED";
+    model = new char[model_temp.length() + 1];
+    snprintf(model, model_temp.length() + 1, "%s", model_temp.c_str());
+
+    // "$Revision: 1.5 $"
+    // Note: HomeKit only allows versions in the format X.Y.Z, so we can't append the library header revision as well
+    String revision_code = WS2812FXJVDW_C_REV;
+
+    version = new char[revision_code.length() + 1];
+    snprintf(version, revision_code.length() + 1, "%s", revision_code.c_str());
+    PRINT1("VERSION: %s\n", version);
+
+    String mac = WiFi.macAddress();
+    LOG1("MAC ADDRESS: " + mac + "\n");
+    snprintf(dev_guid_mac, sizeof(dev_guid_mac) - 1, "%c%c%c%c%c%c%c%c", mac[6], mac[7], mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
+
+    snprintf(ap_ssid, sizeof(ap_ssid) - 1, "HSLED-%c%c%c%c%c%c", mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
+    PRINT1("AP ID: %s\n", ap_ssid);
+
+    snprintf(host_name, sizeof(host_name) - 1, "HSLED-%c%c%c%c%c%c", mac[9], mac[10], mac[12], mac[13], mac[15], mac[16]);
+    PRINT1("WIFI HOST NAME: %s\n", host_name);
+    WiFi.setHostname(host_name);
+
+    uint16_t startup_delay = ((uint16_t)mac[15]) << 4 ^ mac[16];
+    PRINT1("waiting : %d ms\n", startup_delay);
+    delay(startup_delay); // wait a random time based on MAC address before starting
+
+    LOG1("============================================================\n");
+
+    // see here for details: https://github.com/HomeSpan/HomeSpan/blob/master/docs/Reference.md
+    // homeSpan.enableOTA();
+    // By not calling these functions, HomeSpan will not attempt to use those features
+    // homeSpan.setControlPin(21); // default is 21
+    homeSpan.setStatusPin(GPIO_NUM_2); // default is 13
+    homeSpan.setApSSID(ap_ssid); // default is "HomeSpan-Setup"
+    homeSpan.setApPassword("homespan"); // default is "homespan"
+    homeSpan.setQRID(HOMEKIT_SETUP_QRCODE); // default is "HSPN"
+    // homeSpan.setQRID(HOMEKIT_SETUP_QRCODE); // default is "HSPN"
+    // homeSpan.processSerialCommand("S 07072071");
+
+    // homeSpan.defaultSetupCode = "08801118"; // default is DEFAULT_SETUP_CODE = "46637726"
+    //  must be called last
+    homeSpan.enableAutoStartAP(); // enables automatic start-up of WiFi Access Point if WiFi Credentials are not found at boot time
+    homeSpan.begin(Category::Bridges, "HomeSpan Bridge");
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify("Bridge #1", manufacturer, this_dev_guid, model, "0.1", 3);
+    new Service::HAPProtocolInformation();
+    new Characteristic::Version("1.1.0");
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify("RGB LED", manufacturer, this_dev_guid, model, version, 0);
+    new DEV_RgbLED(&LED);
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify("RGB FX", manufacturer, this_dev_guid, model, version, 0);
+    new DEV_RgbLED(&FX);
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
+    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
+    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
+    mode_switches++;
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
+    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
+    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
+    mode_switches++;
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
+    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
+    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
+    mode_switches++;
+
+    new SpanAccessory();
+    MAKE_NEXT_DEV_GUID;
+    new DEV_Identify(names[mode_switches], manufacturer, this_dev_guid, model, version, 0);
+    modes[mode_switches].mode_switch = new DEV_LED(&modes[mode_switches]);
+    modes[mode_switches].on_HomeKit_change = MODE_on_HomeKit_change;
+    mode_switches++;
+
+    homeSpan.poll();
+
+    const uint8_t WS2812FX_DEFAULT_COLOUR = 0, WS2812FX_DEFAULT_BRIGHTNESS = 0, WS2812FX_DEFAULT_MODE = 0, WS2812FX_DEFAULT_SPEED = 0;
+
+    LOG1("============================= LED ===============================\n");
+    PRINT1("DEFAULTS: COLOUR: 0x%06X RGB(%d,%d,%d), BRIGHTNESS: %d, MODE: %d, SPEED: %d\n",
+        WS2812FX_DEFAULT_COLOUR,
+        (WS2812FX_DEFAULT_COLOUR >> 16) & 0xFF,
+        (WS2812FX_DEFAULT_COLOUR >> 8) & 0xFF,
+        (WS2812FX_DEFAULT_COLOUR >> 0) & 0xFF,
+        WS2812FX_DEFAULT_BRIGHTNESS,
+        WS2812FX_DEFAULT_MODE,
+        WS2812FX_DEFAULT_SPEED);
+    // PRINT1("IO PIN: %d\n", WS2812FX_IO_PIN);
+    PRINT1("STRING PIXELS: %d -->\n", led_string->VirtualPixels);
+    for (int strip_index = 0; strip_index < led_string->Segments; strip_index++) {
+        PRINT1("STRIP PIXELS: %d --> ", led_string->StripRealPixels(strip_index));
+        for (uint8_t i = 0; i < led_string->StripSegments(strip_index); i++) {
+            PRINT1("\t[%d]=%d,%d ", i, led_string->StripSegmentOffset(strip_index, i), led_string->StripSegmentPixelCount(strip_index, i));
+        }
+        LOG1("\tTYPE: ");
+        switch (led_string->StripPixelType(strip_index)) {
+        case PIXEL_RGB:
+            LOG1("\tRGB");
+            break;
+        case PIXEL_RGBW:
+            LOG1("\tRGBW");
+            break;
+        case PIXEL_GRB:
+            LOG1("\tGRB");
+            break;
+        case PIXEL_GRBW:
+            LOG1("\tGRBW");
+            break;
+        default:
+            PRINT1("\tunknown(%d)", led_string->StripPixelType(strip_index));
+            break;
+        }
+        LOG1("\n");
+    }
+    LOG1("============================= LED ===============================\n");
+} // end of setup()
+
 void loop()
 {
     homeSpan.poll();
-    delay(1);
 
     // check whether it is time to perform a check for new software
     uint64_t now = micros();
@@ -556,5 +542,6 @@ void loop()
         PRINT1("next OTA check: %lld\n", next_ota_check_time);*/
     }
 
-    led_string->Update();
+    led_string->MaterialisePixelData(MAIN_LOOP_DELAY);
+    delay(MAIN_LOOP_DELAY);
 } // end of loop()

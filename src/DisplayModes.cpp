@@ -28,8 +28,8 @@ void mode_comet(LEDStripPixelInfo_t* lspi)
     } else {
         // Run the mode
         lspi->string->ClearTo(0);
-        const uint16_t comets = lspi->virtual_pixel_count / 20;
-        const uint16_t increment = lspi->virtual_pixel_count / comets;
+        const uint16_t comets = lspi->string->VirtualPixels / 20 / lspi->oversampling;
+        const uint16_t increment = lspi->string->VirtualPixels / comets;
         const uint16_t comet_length = increment / 2;
         uint16_t pixel_offset = lspi->pixel_offset >> 4;
 
@@ -54,9 +54,9 @@ void mode_rainbow_cycle(LEDStripPixelInfo_t* lspi)
         // Initialise the mode
     } else {
         // Run the mode
-        float hue = 0, hue_increment = 1.0f / lspi->virtual_pixel_count;
-        uint16_t pixel_offset = lspi->pixel_offset >> 1;
-        for (uint16_t pixel_index = 0; pixel_index < lspi->virtual_pixel_count; pixel_index++) {
+        float hue = 0, hue_increment = 1.0f / lspi->string->VirtualPixels;
+        uint16_t pixel_offset = lspi->pixel_offset * lspi->oversampling;
+        for (uint16_t pixel_index = 0; pixel_index < lspi->string->VirtualPixels; pixel_index++) {
             HslColor c(hue, 1.0, 0.5);
             lspi->string->SetStripPixel(pixel_index + pixel_offset, c, false);
             hue += hue_increment;
@@ -79,7 +79,7 @@ void mode_flash_sparkle(LEDStripPixelInfo_t* lspi)
         lspi->string->ClearTo(HslColor(lspi->hsl.H, 1.0f, 0.5f));
         RgbColor white(255, 255, 255);
         uint16_t random_range = 50;
-        for (uint16_t i = 0; i < lspi->virtual_pixel_count; i++) {
+        for (uint16_t i = 0; i < lspi->string->VirtualPixels; i++) {
             if (random(0, random_range) < 1) {
                 lspi->string->SetStripPixel(i, white, false);
             }
@@ -104,7 +104,7 @@ void mode_fireworks_random(LEDStripPixelInfo_t* lspi)
         // set a background grey/smoke that is fairly constant regardless of the current brightness setting (looks a bit weird during transitions though)
         const uint16_t low_b = 2;
 
-        for (uint16_t i = 0; i < lspi->virtual_pixel_count; i++) {
+        for (uint16_t i = 0; i < lspi->string->VirtualPixels; i++) {
             RgbColor px = lspi->string->GetStripPixel(i, false);
 
             px_r = px.R;
@@ -129,14 +129,14 @@ void mode_fireworks_random(LEDStripPixelInfo_t* lspi)
 
         RgbColor px_left(0), px_center(0), px_right(0);
 
-        for (uint16_t i = 0; i < lspi->virtual_pixel_count; i++) {
+        for (uint16_t i = 0; i < lspi->string->VirtualPixels; i++) {
             // Check that we have passed the first LED before attempting to fetch the colour of the LEFT neighbour
             if (i > 0) {
                 px_left = lspi->string->GetStripPixel(i - 1, false);
             }
             px_center = lspi->string->GetStripPixel(i, false);
             // Check that we have not yet reached the 2nd last LED before attempting to fetch the colour of the RIGHT neighbour
-            if (i < (lspi->virtual_pixel_count - 1)) {
+            if (i < (lspi->string->VirtualPixels - 1)) {
                 px_right = lspi->string->GetStripPixel(i + 1, false);
             }
 
@@ -157,10 +157,10 @@ void mode_fireworks_random(LEDStripPixelInfo_t* lspi)
             lspi->string->SetStripPixel(i, RgbColor(px_r, px_g, px_b), false);
         }
 
-        for (uint16_t i = 0; i < 1 + (lspi->virtual_pixel_count / 20); i++) {
+        for (uint16_t i = 0; i < 1 + (lspi->string->VirtualPixels / 20); i++) {
             if (random(0, 36) == 0) {
                 HslColor c(((float)random(0, 360)) / 360.f, 1.0f, 0.5f);
-                lspi->string->SetStripPixel(random(0, lspi->virtual_pixel_count), c, false);
+                lspi->string->SetStripPixel(random(0, lspi->string->VirtualPixels), c, false);
             }
         }
     }
@@ -188,8 +188,8 @@ void mode_flicker_in_out(LEDStripPixelInfo_t* lspi)
             if (l > 0.6f)
                 l = 0.6f;
             lspi->string->ClearTo(HslColor(lspi->hsl.H, 1.0f - l / 10.0f, l));
-            for (uint16_t i = 0; i < lspi->virtual_pixel_count / 10; i++) {
-                lspi->string->SetStripPixel(random(0, lspi->virtual_pixel_count), RgbColor((uint8_t)(l * 256)), false);
+            for (uint16_t i = 0; i < lspi->string->VirtualPixels / 10; i++) {
+                lspi->string->SetStripPixel(random(0, lspi->string->VirtualPixels), RgbColor((uint8_t)(l * 256)), false);
             }
         } else {
             lspi->string->ClearTo(RgbColor(0));
@@ -243,7 +243,7 @@ void mode_twinkle_random(LEDStripPixelInfo_t* lspi)
         const uint8_t RANDOM = 3;
 
         for (uint8_t i = 0; i < PIXELS; i++) {
-            uint16_t p = random(0, lspi->virtual_pixel_count);
+            uint16_t p = random(0, lspi->string->VirtualPixels);
             if (random(0, 10) < RANDOM) {
                 lspi->string->SetStripPixel(p, RgbColor(0), false);
             } else {
