@@ -250,10 +250,22 @@ void mode_static(LEDStripPixelInfo_t* lspi)
 {
     if (!lspi->run) {
         // Initialise the mode
-        lspi->string->ClearTo(0);
     } else {
         // Run the mode
         lspi->string->ClearTo(lspi->rgb);
+    }
+}
+
+// --------------------------------------------------------------------------------------
+// PATTERN: off
+// --------------------------------------------------------------------------------------
+void mode_off(LEDStripPixelInfo_t* lspi)
+{
+    if (!lspi->run) {
+        // Initialise the mode
+    } else {
+        // Run the mode
+        lspi->string->ClearTo(0);
     }
 }
 
@@ -268,7 +280,8 @@ DisplayModeInfo_t display_modes[DISPLAY_MODES] = {
     { NULL, &mode_dual_scan },
     { NULL, &mode_twinkle_random },
     { NULL, &mode_flicker_in_out },
-    { NULL, &mode_static }
+    { NULL, &mode_static },
+    { NULL, &mode_off }
 };
 
 } // namespace DisplayMode
