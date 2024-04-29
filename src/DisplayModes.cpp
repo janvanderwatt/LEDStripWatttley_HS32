@@ -23,20 +23,18 @@ void mode_comet(LEDStripPixelInfo_t* lspi)
 {
     if (!lspi->run) {
         // Initialise the mode
-        lspi->hsl.H = random(0, 360);
-        lspi->hsl.H /= 360;
     } else {
         // Run the mode
         lspi->string->ClearTo(0);
-        const uint16_t comets = lspi->string->VirtualPixels / 20 / lspi->oversampling;
+        const uint16_t comets = 1 + (lspi->string->VirtualPixels / 20 / lspi->oversampling);
         const uint16_t increment = lspi->string->VirtualPixels / comets;
         const uint16_t comet_length = increment / 2;
         uint16_t pixel_offset = lspi->pixel_offset >> 4;
 
         for (uint16_t i = 0; i < comet_length; i++) {
-            float l = lspi->hsl.L;
-            l *= i;
-            l /= comet_length * 2;
+            float l = i;
+            l /= comet_length;
+            l = l * l / 2;
             HslColor c(lspi->hsl.H, 1.0f, l);
             for (uint16_t comet = 0, pixel = i + pixel_offset; comet < comets; comet++, pixel += increment) {
                 lspi->string->SetStripPixel(pixel, c, false);
@@ -71,9 +69,6 @@ void mode_flash_sparkle(LEDStripPixelInfo_t* lspi)
 {
     if (!lspi->run) {
         // Initialise the mode
-        lspi->hsl.H = random(0, 90);
-        lspi->hsl.H -= 45;
-        lspi->hsl.H /= 360;
     } else {
         // Run the mode
         lspi->string->ClearTo(HslColor(lspi->hsl.H, 1.0f, 0.5f));
@@ -111,15 +106,15 @@ void mode_fireworks_random(LEDStripPixelInfo_t* lspi)
             px_g = px.G;
             px_b = px.B;
             // fade out (k=0.875)
-            px.R = (92 * px_r) / 100;
+            px.R = (90 * px_r) / 100;
             if (px.R < low_b) {
                 px.R = low_b;
             }
-            px.G = (92 * px_g) / 100;
+            px.G = (90 * px_g) / 100;
             if (px.G < low_b) {
                 px.G = low_b;
             }
-            px.B = (92 * px_b) / 100;
+            px.B = (90 * px_b) / 100;
             if (px.B < low_b) {
                 px.B = low_b;
             }
@@ -204,11 +199,6 @@ void mode_dual_scan(LEDStripPixelInfo_t* lspi)
 {
     if (!lspi->run) {
         // Initialise the mode
-        lspi->hsl.H = random(90, 180);
-        lspi->hsl.H /= 360;
-        lspi->hsl.S = 1.0f;
-        lspi->hsl.L = 0.5f;
-        lspi->rgb = RgbColor(lspi->hsl);
     } else {
         // Run the mode
         uint16_t TIME_SPAN = 2000;
@@ -260,6 +250,7 @@ void mode_static(LEDStripPixelInfo_t* lspi)
 {
     if (!lspi->run) {
         // Initialise the mode
+        lspi->string->ClearTo(0);
     } else {
         // Run the mode
         lspi->string->ClearTo(lspi->rgb);
