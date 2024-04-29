@@ -47,10 +47,10 @@ typedef struct
     const WS2812FX_power_model_t* power_model;
 } WS2812FX_info_t;
 
-#define WS2812FX_SINGLE_SEGMENT_STRIP(led_type, led_count) static WS2812FX_info_t pixel_info = { .pixel_type = led_type, .total_pixel_count = led_count, .segments = 1, .segment_pixel_counts = (uint16_t[1]) { led_count }, .segment_offsets = (uint16_t[1]) { 0 }, .segment_directions = NULL, .pixel_x = NULL, .pixel_y = NULL, .pixel_r = NULL, .pixel_a = NULL, .MAX_X = 32 * led_count, .MAX_Y = 32 * led_count, .MAX_R = 16 * led_count + 32, .BAND_WIDTH = 16 }
-#define WS2812FX_SINGLE_SEGMENT_STRIP_POWER_MODEL(led_type, led_count, Ir, Ig, Ib, Iw, Isupply_max)                                       \
+#define WS2812FX_SINGLE_SEGMENT_STRIP(led_type, led_count, pin) static WS2812FX_info_t pixel_info[1] = { { .pixel_type = led_type, .pixel_pin = pin, .total_pixel_count = led_count, .usable_pixel_count = led_count, .segments = 1, .segment_pixel_counts = (uint16_t[1]) { led_count }, .segment_offsets = (uint16_t[1]) { 0 }, .segment_directions = NULL, .pixel_x = NULL, .pixel_y = NULL, .pixel_r = NULL, .pixel_a = NULL, .MAX_X = 32 * led_count, .MAX_Y = 32 * led_count, .MAX_R = 16 * led_count + 32, .BAND_WIDTH = 16 } }
+#define WS2812FX_SINGLE_SEGMENT_STRIP_POWER_MODEL(led_type, led_count, pin, Ir, Ig, Ib, Iw, Isupply_max)                                  \
     static WS2812FX_power_model_t power_model = { .i_red = Ir, .i_green = Ig, .i_blue = Ib, .i_white = Iw, .i_supply_max = Isupply_max }; \
-    static WS2812FX_info_t pixel_info = { .pixel_type = led_type, .total_pixel_count = led_count, .segments = 1, .segment_pixel_counts = (uint16_t[1]) { led_count }, .segment_offsets = (uint16_t[1]) { 0 }, .segment_directions = NULL, .pixel_x = NULL, .pixel_y = NULL, .pixel_r = NULL, .pixel_a = NULL, .MAX_X = 32 * led_count, .MAX_Y = 32 * led_count, .MAX_R = 16 * led_count + 32, .BAND_WIDTH = 16, .power_model = &power_model }
+    static WS2812FX_info_t pixel_info[1] = { { .pixel_type = led_type, .pixel_pin = pin, .total_pixel_count = led_count, .usable_pixel_count = led_count, .segments = 1, .segment_pixel_counts = (uint16_t[1]) { led_count }, .segment_offsets = (uint16_t[1]) { 0 }, .segment_directions = NULL, .pixel_x = NULL, .pixel_y = NULL, .pixel_r = NULL, .pixel_a = NULL, .MAX_X = 32 * led_count, .MAX_Y = 32 * led_count, .MAX_R = 16 * led_count + 32, .BAND_WIDTH = 16, .power_model = &power_model } }
 
 #include <NeoPixelBus.h>
 
@@ -67,6 +67,7 @@ struct LEDStripPixelInfo_t {
     uint32_t pixel_offset;
     bool run;
     bool reverse = false;
+    uint8_t speed;
     uint32_t mode_start_time, now, time_since_start;
     int8_t mode_index = -1;
     uint32_t next_mode_change_time;
@@ -79,7 +80,7 @@ struct LEDStripPixelInfo_t {
 class LEDString {
 protected:
     LEDStripPixelInfo_t lspi[2];
-    LEDStripPixelInfo_t *current_lspi, *previous_lspi;
+    LEDStripPixelInfo_t *running_lspi;
     uint8_t Speed, Inverted, Brightness, ModeIndex;
     uint8_t currentIndex, previousIndex;
     int16_t fadeTimeMs;
@@ -109,6 +110,8 @@ public:
 
     void StartModeTransition();
     void SetTransitionModesWithFading(uint8_t faing_on);
+    void set_next_mode_time(LEDStripPixelInfo_t* lspi);
+    void start_mode_time(uint32_t now, LEDStripPixelInfo_t* lspi);
 
     uint8_t GetMode();
     float GetMode360();
@@ -121,5 +124,6 @@ public:
     uint16_t StripSegmentOffset(uint8_t strip_index, uint8_t segment_index);
     uint16_t StripSegmentPixelCount(uint8_t strip_index, uint8_t segment_index);
 
+    void RunMode(uint32_t now, LEDStripPixelInfo_t *lspi_to_run);
     void MaterialisePixelData(uint8_t time_delay_ms);
 };
