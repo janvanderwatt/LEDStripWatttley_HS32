@@ -16,6 +16,7 @@ void initialise()
     }
 }
 
+//uint8_t debug = 1;
 // --------------------------------------------------------------------------------------
 // PATTERN: comet
 // --------------------------------------------------------------------------------------
@@ -29,17 +30,34 @@ void mode_comet(LEDStripPixelInfo_t* lspi)
         const uint16_t comets = 1 + (lspi->string->VirtualPixels / 20 / lspi->oversampling);
         const uint16_t increment = lspi->string->VirtualPixels / comets;
         const uint16_t comet_length = increment / 2;
-        uint16_t pixel_offset = lspi->pixel_offset >> 4;
+        const uint8_t shift = (6 - lspi->oversampling_pwr2);
+        const uint16_t mod = 1 << shift;
+        uint16_t pixel_offset = (lspi->pixel_offset >> shift);
+        // float pixel_fraction = lspi->pixel_offset % mod;
+        // pixel_fraction /= mod;
 
+        // RgbColor prev_rgb = RgbColor(0, 0, 0);
         for (uint16_t i = 0; i < comet_length; i++) {
-            float l = i;
-            l /= comet_length;
-            l = l * l / 2;
-            HslColor c(lspi->hsl.H, 1.0f, l);
+            float l = (comet_length - i);
+            l /= (comet_length - 1);
+            // l += pixel_fraction;
+            // if (l > 1.0f)
+            //     l -= 1.0f;
+            // l /= 2.0f;
+
+            l = (l * l) / 2;
+            // if (debug) {
+            //     if (lspi->pixel_offset > 10) {
+            //         Serial.printf("lspi:%d, po:%d, i:%d, pf:%.3f, l:%.3f\n", lspi->pixel_offset, pixel_offset, i, pixel_fraction, l);
+            //     }
+            // }
+            HslColor c(lspi->hsl.H, lspi->hsl.S, l);
             for (uint16_t comet = 0, pixel = i + pixel_offset; comet < comets; comet++, pixel += increment) {
                 lspi->string->SetStripPixel(pixel, c, false);
             }
         }
+        // if (lspi->pixel_offset > 10)
+        //     debug = 0;
     }
 }
 
@@ -52,12 +70,13 @@ void mode_rainbow_cycle(LEDStripPixelInfo_t* lspi)
         // Initialise the mode
     } else {
         // Run the mode
-        float hue = 0, hue_increment = 1.0f / lspi->string->VirtualPixels;
-        uint16_t pixel_offset = lspi->pixel_offset * lspi->oversampling;
+        float hue = lspi->pixel_fraction, hue_increment = 1.0f / lspi->string->VirtualPixels;
         for (uint16_t pixel_index = 0; pixel_index < lspi->string->VirtualPixels; pixel_index++) {
             HslColor c(hue, 1.0, 0.5);
-            lspi->string->SetStripPixel(pixel_index + pixel_offset, c, false);
+            lspi->string->SetStripPixel(pixel_index, c, false);
             hue += hue_increment;
+            if (hue >= 1.0f)
+                hue -= 1.0f;
         }
     }
 }
