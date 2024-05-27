@@ -60,7 +60,7 @@
     }
 
 #define OTA_FIRMWARE_TYPE "32-HS-LED"
-#define OTA_FIRMWARE_VERSION static_cast<uint16_t>(100 * (static_cast<float>(SOFTWARE_VERSION)))
+#define OTA_FIRMWARE_VERSION static_cast<uint16_t>(100 * (static_cast<float>(SOFTWARE_VERSION)) + 0.4f)
 #define OTA_CHECK_URL "http://linode.webhop.org/ota/fota-esp32/otacheck.php"
 #define OTA_FIRST_CHECK_SECONDS 60
 #define OTA_CHECK_INTERVAL_HOURS 23
@@ -77,11 +77,11 @@
 
 LEDString* led_string;
 
+LED_changes_t LED;
+LED_changes_t FX;
+
 void LED_on_HomeKit_change();
 void FX_on_HomeKit_change();
-
-LED_changes_t LED = { .power = 0, .H = 60, .S = 100, .V = 80, .on_HomeKit_change = LED_on_HomeKit_change };
-LED_changes_t FX = { .power = 0, .H = 0, .S = 90, .V = 50, .on_HomeKit_change = FX_on_HomeKit_change };
 
 void MODE_on_HomeKit_change(int);
 const char* names[] = {
@@ -130,7 +130,7 @@ void LED_on_HomeKit_change()
             FX.power = 1;
         }
     } else {
-        led_string->SetBrightness(0);
+        // led_string->SetBrightness(0);
         // if the FX is currently switched ON, switch if OFF and flag to switch it ON again when the LED is turned ON again
         if (FX.power != 0) {
             FX.power = 128;
@@ -154,19 +154,19 @@ void FX_on_HomeKit_change()
         fx_speed = 50 - FX.V;
     }
     fx_speed *= 5.1;
-    led_string->SetInverted(fx_direction);
-    led_string->SetSpeed(fx_speed);
     if (LED.power) {
         // only use bit 0 to determine whether to switch on the FX
         if (FX.power & 1) {
             led_string->SetMode360(FX.H);
         } else {
             led_string->SetMode(DisplayMode::DISPLAY_MODE_STATIC);
+            FX.power = 0;
         }
         led_string->SetColorHSI(LED.H, LED.S, LED.V);
+        led_string->SetInverted(fx_direction);
+        led_string->SetSpeed(fx_speed);
     } else {
-        led_string->SetMode(DisplayMode::DISPLAY_MODE_STATIC);
-        led_string->SetColorRGB(0xFF0000);
+        led_string->SetMode(DisplayMode::DISPLAY_MODE_OFF);
     }
     uint8_t fx_mode = led_string->GetMode();
 #define LOGX LOG1
@@ -178,43 +178,43 @@ void FX_on_HomeKit_change()
     LOGX(", fx_direction:%d", fx_direction);
     LOGX("\n");
     for (uint8_t mode = 0; mode < mode_switches; mode++) {
-        uint8_t desired_state = 0;
+        uint8_t desired_state = LED.power > 0;
         // modes can only be ON if the LED is also ON
         if (LED.power > 0) {
             //     {.id = 1, .mode_state = 0, .FX_power = 1, .FX_mode = 3, .FX_speed = 128, .FX_direction = 2},   // rainbow cycle
-            uint8_t mode_mode = modes[mode].FX_mode;
 
             LOGX("  --? compare: [%s]", names[mode]);
             LOGX("[mode].FX_power:%d", modes[mode].FX_power);
             LOGX(", [mode].FX_mode:%d", modes[mode].FX_mode);
-            LOGX(", mode_mode:%d", mode_mode);
             LOGX(", [mode].FX_speed:%d", modes[mode].FX_speed);
             LOGX(", [mode].FX_direction:%d", modes[mode].FX_direction);
             LOGX("\n");
 
             // check for matching FX enable settings (using bit 0 only)
-            if (modes[mode].FX_power == (FX.power & 1)) {
-                // check the INT versions of the mode
-                if (modes[mode].FX_mode < 0 || fx_mode == mode_mode) {
-                    // we have matching mode, check the speed
-                    // if no speed setting is required in the mode, or the speed is within range after mapping from % back to BYTE
-                    if (modes[mode].FX_speed < 0 || (abs(modes[mode].FX_speed - fx_speed) <= 6)) {
-                        // if the speed is 0 (direction irrelevant), directions match, or the mode definition is set to irrelevant/random, then we have a complete match
-                        if (fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction == WS2812FX_DIRECTION_KEEP || modes[mode].FX_direction == WS2812FX_DIRECTION_RANDOM) {
-                            desired_state = 1;
-                        } else {
-                            LOGX("fx_speed == 0 || (modes[mode].FX_direction == fx_direction) || modes[mode].FX_direction == %d || modes[mode].FX_direction == %d\n", WS2812FX_DIRECTION_KEEP, WS2812FX_DIRECTION_RANDOM);
-                        }
-                    } else {
-                        LOGX("(failed test)modes[mode].FX_speed < 0 || (abs(modes[mode].FX_speed - fx_speed) <= 6\n");
-                    }
-                } else {
-                    LOGX("(failed test) modes[mode].FX_mode < 0 || fx_mode == mode_mode\n");
-                }
-            } else {
-                LOGX("(failed test) modes[mode].FX_power == (FX.power & 1)\n");
+            if (desired_state && modes[mode].FX_power != (FX.power & 1)) {
+                desired_state = 0;
+                LOGX("-- eliminated because: modes[mode].FX_power != (FX.power & 1)\n");
             }
+            // check the INT versions of the mode
+            if (desired_state && modes[mode].FX_mode >= 0 && modes[mode].FX_mode != fx_mode) {
+                desired_state = 0;
+                LOGX("-- eliminated because: modes[mode].FX_mode >= 0 && modes[mode].FX_mode != fx_mode\n");
+            }
+            // we have matching mode, check the speed only if this is an effect that is switched on
+            if (modes[mode].FX_power) {
+                // if no speed setting is required in the mode, or the speed is within range after mapping from % back to BYTE
+                if (desired_state && modes[mode].FX_speed >= 0 && (abs(modes[mode].FX_speed - fx_speed) > 6)) {
+                    desired_state = 0;
+                    LOGX("-- eliminated because: modes[mode].FX_speed >= 0 && (abs(modes[mode].FX_speed - fx_speed) > 6\n");
+                }
+                // if the speed is 0 (direction irrelevant), directions match, or the mode definition is set to irrelevant/random, then we have a complete match
+                if (desired_state && fx_speed != 0 && (modes[mode].FX_direction != fx_direction) && modes[mode].FX_direction != WS2812FX_DIRECTION_KEEP && modes[mode].FX_direction != WS2812FX_DIRECTION_RANDOM) {
+                    desired_state = 0;
+                    LOGX("-- eliminated because: fx_speed != 0 && (modes[mode].FX_direction != fx_direction) && modes[mode].FX_direction != %d && modes[mode].FX_direction != %d\n", WS2812FX_DIRECTION_KEEP, WS2812FX_DIRECTION_RANDOM);
+                }
+            } // if (modes[mode].FX_power)
         }
+
         // only change the state, and notify HomeKit, if the  mode isn't already in that state
         LOGX("state:%d, desired state:%d\n", modes[mode].mode_state, desired_state);
         if (modes[mode].mode_state != desired_state) {
@@ -420,6 +420,20 @@ void setup()
     new Service::HAPProtocolInformation();
     new Characteristic::Version("1.1.0");
 
+    // set the initial values
+    uint8_t startup_mode = led_string->GetMode();
+    LED.power = startup_mode != DisplayMode::DISPLAY_MODE_OFF;
+    FX.power = LED.power && (startup_mode != DisplayMode::DISPLAY_MODE_STATIC);
+
+    LED.H = led_string->HSL.H * 360.0f;
+    LED.S = led_string->HSL.S * 100.0f;
+    LED.V = (float)led_string->Brightness / 2.55f;
+
+    LED.on_HomeKit_change = LED_on_HomeKit_change;
+    FX.on_HomeKit_change = FX_on_HomeKit_change;
+    FX.H = led_string->GetMode360();
+    FX.S = 90;
+    FX.V = 50.499f + (led_string->Inverted == 0 ? 1 : -1) * ((float)led_string->Speed / 5.1f);
     new SpanAccessory();
     MAKE_NEXT_DEV_GUID;
     new DEV_Identify("RGB LED", manufacturer, this_dev_guid, model, version, 0);
