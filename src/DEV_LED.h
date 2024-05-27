@@ -3,7 +3,7 @@
 //   DEVICE-SPECIFIC LED SERVICES //
 ////////////////////////////////////
 
-#include "led_configurations.h"
+#include "LedConfigurations.h"
 
 typedef void (*LED_change_callback)(void);
 typedef void (*mode_change_callback)(int);
