@@ -65,7 +65,7 @@ LEDStrip<T_COLOR_TYPE, T_COLOR_FEATURE, T_METHOD>::LEDStrip(NeoPixelBus<T_COLOR_
             strip_pixel_lookup[strip_pixel_index + usable_pixel_count] = use_inverse_direction ? q : p;
             segment_pixel_lookup[p] = p;
             segment_pixel_lookup[p + usable_pixel_count] = use_inverse_direction ? q : p;
-            Serial.printf("%d/%d,", strip_pixel_lookup[strip_pixel_index], strip_pixel_lookup[strip_pixel_index + usable_pixel_count]);
+            // Serial.printf("%d/%d,", strip_pixel_lookup[strip_pixel_index], strip_pixel_lookup[strip_pixel_index + usable_pixel_count]);
             // segment_lookup[strip_pixel_index_0] = segment_index;
             p++;
             q--;
@@ -198,6 +198,7 @@ LEDString::LEDString()
     Speed = WS2812FX_DEFAULT_SPEED;
     Brightness = WS2812FX_DEFAULT_BRIGHTNESS;
     SetColorRGB(WS2812FX_DEFAULT_COLOUR);
+    Serial.printf("--> DEFAULT: rgb(%d,%d,%d)", RGB.R, RGB.G, RGB.B);
     ModeIndex = DisplayMode::WS2812FX_DEFAULT_MODE;
 
     fadeTimeMs = 0;
@@ -207,10 +208,10 @@ LEDString::LEDString()
         lspi[i].string = this;
         lspi[i].reverse = false;
         lspi[i].oversampling = OVERSAMPLING;
-        lspi[i].mode_index = (i == previousIndex) ? DisplayMode::DISPLAY_MODE_STATIC : ModeIndex;
-        lspi[i].rgb = (i == previousIndex) ? RgbColor(0) : RGB;
-        lspi[i].hsl = (i == previousIndex) ? HslColor(0, 0, 0) : HSL;
-        lspi[i].oversampling = OVERSAMPLING;
+        lspi[i].oversampling_pwr2 = OVERSAMPLING_PWR2;
+        lspi[i].mode_index = (i == previousIndex) ? DisplayMode::DISPLAY_MODE_OFF : ModeIndex;
+        lspi[i].rgb = RGB;
+        lspi[i].hsl = HSL;
         lspi[i].pixel_offset = 0;
         lspi[i].speed = Speed;
 
@@ -426,7 +427,7 @@ void LEDString::SetColorRGB(u_int8_t r, u_int8_t g, u_int8_t b)
 // --------------------------------------------------------------------------------------
 void LEDString::SetColorRGB(uint32_t rgb)
 {
-    SetColorRGB(rgb >> 16, (rgb >> 8) & 0xFF, rgb & 0xFF);
+    SetColorRGB((rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
 }
 
 // --------------------------------------------------------------------------------------
@@ -434,7 +435,9 @@ void LEDString::SetColorRGB(uint32_t rgb)
 // --------------------------------------------------------------------------------------
 void LEDString::SetSpeed(uint8_t speed)
 {
+    Serial.printf("speed:%d", speed);
     Speed = speed;
+    running_lspi->speed = speed;
 }
 
 // --------------------------------------------------------------------------------------
@@ -442,7 +445,9 @@ void LEDString::SetSpeed(uint8_t speed)
 // --------------------------------------------------------------------------------------
 void LEDString::SetInverted(uint8_t inverted)
 {
+    Serial.printf("inverted:%d", inverted);
     Inverted = inverted;
+    running_lspi->reverse = inverted;
 }
 
 // --------------------------------------------------------------------------------------
@@ -513,9 +518,21 @@ void LEDString::RunMode(uint32_t now, LEDStripPixelInfo_t* lspi_to_run)
 
     running_lspi->now = now;
     running_lspi->time_since_start = now - running_lspi->mode_start_time;
+    uint32_t mod = ((uint32_t)VirtualPixels) << 8;
+    running_lspi->pixel_fraction = running_lspi->pixel_offset;
+    running_lspi->pixel_fraction /= mod;
     DisplayMode::display_modes[running_lspi->mode_index].display_mode(running_lspi);
-    running_lspi->pixel_offset += running_lspi->speed >> 2;
-    running_lspi->pixel_offset %= ((uint32_t)VirtualPixels) << 8;
+    if (running_lspi->reverse) {
+        running_lspi->pixel_offset -= running_lspi->speed;
+        if (running_lspi->pixel_offset > mod) {
+            running_lspi->pixel_offset += mod;
+        }
+    } else {
+        running_lspi->pixel_offset += running_lspi->speed;
+        if (running_lspi->pixel_offset > mod) {
+            running_lspi->pixel_offset -= mod;
+        }
+    }
 }
 
 // --------------------------------------------------------------------------------------
@@ -552,7 +569,7 @@ void LEDString::MaterialisePixelData(uint8_t time_delay_ms)
                 currentIndex, current_lspi->mode_index, current_lspi->rgb.R, current_lspi->rgb.G, current_lspi->rgb.B,
                 previousIndex, previous_lspi->mode_index, previous_lspi->rgb.R, previous_lspi->rgb.G, previous_lspi->rgb.B);
         }
-        Serial.printf("kc:%d, kp:%d | ", kc, kp);
+        // Serial.printf("kc:%d, kp:%d | ", kc, kp);
         fadeTimeMs -= time_delay_ms;
     }
 
@@ -576,7 +593,7 @@ void LEDString::MaterialisePixelData(uint8_t time_delay_ms)
             }
             sample++;
         }
-        uint8_t shift = SHIFT + 7 + OVERSAMPLING_PWR2 + (fading ? 1 : 0);
+        uint8_t shift = SHIFT + 7 + OVERSAMPLING_PWR2;
         // Serial.printf("shift(%d) : ", shift);
         pr >>= shift;
         pg >>= shift;
@@ -603,9 +620,11 @@ void LEDString::MaterialisePixelData(uint8_t time_delay_ms)
         }
         strips[strip_index]->SetStripPixel(pixel_index++, c, false);
         if (pixel_index == pixel_info[strip_index].usable_pixel_count) {
-            strips[strip_index]->Show();
             pixel_index = 0;
             strip_index++;
         }
+    }
+    for (strip_index = 0; strip_index < STRIPS; strip_index++) {
+        strips[strip_index]->Show();
     }
 }
